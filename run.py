@@ -5,6 +5,18 @@ import traceback
 import pygame
 from dotenv import load_dotenv
 
+# Global Exception Hook to capture PyQt5 slot exceptions
+def exception_handler(exc_type, exc_value, exc_traceback):
+    print("CRITICAL: Unhandled exception caught!", file=sys.stderr)
+    traceback.print_exception(exc_type, exc_value, exc_traceback, file=sys.stderr)
+    try:
+        with open("crash_log.txt", "w") as f:
+            traceback.print_exception(exc_type, exc_value, exc_traceback, file=f)
+    except:
+        pass
+
+sys.excepthook = exception_handler
+
 # Local imports
 from src.core.constants import *
 from src.core.state_manager import StateManager, GameState
@@ -110,7 +122,7 @@ class PianoTilesApp:
                                 pygame.display.quit()
                             
                             # Clean up after playlist
-                            pygame.quit()
+                            pygame.display.quit()
                         else:
                             # Single Song
                             current_meta = next((s for s in songs if os.path.normpath(s["path"]) == os.path.normpath(selected_song)), {})
@@ -118,7 +130,7 @@ class PianoTilesApp:
                             if current_beats is not None:
                                 self.init_game(selected_song, difficulty, current_beats, custom_settings, current_meta)
                                 last_results = self.run_game_loop()
-                                pygame.quit()
+                                pygame.display.quit()
                     else:
                         # Exit back to Launcher
                         break
@@ -287,17 +299,6 @@ class PianoTilesApp:
             if self.game_engine:
                 self.game_engine.update(dt)
                 
-            if state == GameState.COUNTDOWN:
-                elapsed = (pygame.time.get_ticks() - self.game_engine.countdown_start) / 1000.0
-                if elapsed >= 3.0:
-                    self.state_manager.change_state(GameState.GAMEPLAY)
-                    self.audio_manager.play()
-                    if getattr(self, 'is_resuming', False):
-                        self.audio_manager.unpause()
-                        self.is_resuming = False
-                else:
-                    self.game_engine.countdown = 3 - int(elapsed)
-                
                 # Discord RPC Update (Every 5s)
                 now = pygame.time.get_ticks()
                 last_update = getattr(self, 'last_rpc_update', 0)
@@ -322,7 +323,8 @@ class PianoTilesApp:
                             "song": self.selected_song_title,
                             "rank": "F",
                             "hit_log": list(self.game_engine.hit_log), # Precision data
-                            "duration": getattr(self.game_engine, 'song_duration', 0)
+                            "duration": getattr(self.game_engine, 'song_duration', 0),
+                            "failed": (self.game_engine.health <= 0)
                         }
                         
                         # Calculating Rank
@@ -353,6 +355,18 @@ class PianoTilesApp:
 
                     self.audio_manager.stop()
                     self.state_manager.change_state(GameState.GAME_OVER)
+                
+            if state == GameState.COUNTDOWN:
+                if self.game_engine:
+                    elapsed = (pygame.time.get_ticks() - self.game_engine.countdown_start) / 1000.0
+                    if elapsed >= 3.0:
+                        self.state_manager.change_state(GameState.GAMEPLAY)
+                        self.audio_manager.play()
+                        if getattr(self, 'is_resuming', False):
+                            self.audio_manager.unpause()
+                            self.is_resuming = False
+                    else:
+                        self.game_engine.countdown = 3 - int(elapsed)
         
         elif state == GameState.PAUSED:
             if self.game_engine:

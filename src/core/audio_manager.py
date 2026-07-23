@@ -70,26 +70,6 @@ class AudioManager:
             self.is_playing = True
         except Exception as e:
             print(f"Preview error: {e}")
-        self.sfx = {}
-
-    def load_sfx(self, name, path):
-        """Loads a sound effect into memory."""
-        try:
-            if os.path.exists(path):
-                self.sfx[name] = pygame.mixer.Sound(path)
-                return True
-            print(f"SFX not found: {path}")
-        except Exception as e:
-            print(f"Error loading SFX {name}: {e}")
-        return False
-
-    def play_sfx(self, name):
-        """Plays a loaded sound effect."""
-        if name in self.sfx:
-            try:
-                self.sfx[name].play()
-            except:
-                pass
 
     def load_song(self, path):
         """Loads a song for playback with retry for Windows file conflicts."""

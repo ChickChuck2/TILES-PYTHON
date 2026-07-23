@@ -2286,5 +2286,21 @@
       "artist": "DJ Jorej",
       "duration": "2:48"
     }
+  },
+  "d:\\source\\repos\\tiles-python\\assets\\music\\youtube\\noites_em_verso_8_lugar_nenhum_trap_romantico.mp3": {
+    "mtime": 1784828184.305604,
+    "metadata": {
+      "title": "Noites em Verso #8 \ud83d\udc94 Lugar nenhum \u2022 Trap Romantico",
+      "artist": "Noites em Verso [Oficial]",
+      "duration": "13:36"
+    }
+  },
+  "d:\\source\\repos\\tiles-python\\assets\\music\\youtube\\koyoffe_-_ushanka_ft._predo_official_lyric_video.mp3": {
+    "mtime": 1784829039.7356882,
+    "metadata": {
+      "title": "Koyoffe - USHANKA ft. Predo (Official Lyric Video)",
+      "artist": "Koyoffe, predo",
+      "duration": "3:24"
+    }
   }
 }

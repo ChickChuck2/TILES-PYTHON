@@ -70,6 +70,7 @@ class VibeTunnelEngine:
         self.goods = 0
         self.misses = 0
         self.health = 100.0
+        self.no_fail = self.custom_settings.get("no_fail", False)
         self.current_game_time = -3.0
         self.countdown = 3
         self.countdown_start = 0
@@ -235,16 +236,20 @@ class VibeTunnelEngine:
             self.misses += 1
             self.vibe_meter = 0
             if self.audio_manager: self.audio_manager.play_sfx("miss")
+            if self.health <= 0 and not getattr(self, 'no_fail', False):
+                self.game_over = True
         else:
             self.combo += 1
             mult = 2 if self.fever_mode else 1
             if judgment == "PERFECT":
                 self.score += 300 * mult
                 self.perfects += 1
+                self.health = min(100.0, self.health + 3.0)
                 self.vibe_meter += 1
             else:
                 self.score += 150 * mult
                 self.goods += 1
+                self.health = min(100.0, self.health + 1.0)
             if self.audio_manager: 
                 self.audio_manager.play_sfx("perfect" if judgment == "PERFECT" else "good")
         
@@ -321,6 +326,14 @@ class VibeTunnelEngine:
         vibe_w = int((self.vibe_meter / 10.0) * 200)
         v_color = (0, 255, 255) if not self.fever_mode else (255, 255, 0)
         pygame.draw.rect(self.screen, v_color, (30, 140, vibe_w, 12), border_radius=6)
+        
+        # Health Bar
+        pygame.draw.rect(self.screen, (30, 30, 30), (30, 170, 200, 12), border_radius=6)
+        health_w = int(max(0.0, min(1.0, self.health / 100.0)) * 200)
+        h_pct = self.health / 100.0
+        h_color = (255, 50, 50) if h_pct <= 0.2 else (255, 150, 0) if h_pct <= 0.5 else (0, 255, 100)
+        if health_w > 0:
+            pygame.draw.rect(self.screen, h_color, (30, 170, health_w, 12), border_radius=6)
         
         if self.fever_mode:
             f_txt = font.render("WARP DRIVE ACTIVE", True, (255, 255, 0))

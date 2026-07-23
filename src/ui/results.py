@@ -52,11 +52,11 @@ class ResultsDialog(QDialog):
         self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setModal(True)
-        self.setFixedSize(700, 600)
+        self.setFixedSize(700, 650)
         
         # Main Container (for translucent border)
         self.container = QFrame(self)
-        self.container.setGeometry(0, 0, 700, 600)
+        self.container.setGeometry(0, 0, 700, 650)
         self.container.setStyleSheet(f"""
             QFrame {{ 
                 background-color: qlineargradient(spread:pad, x1:0, y1:0, x2:1, y2:1, stop:0 #1a1a1a, stop:1 #0a0a0a);
@@ -67,7 +67,8 @@ class ResultsDialog(QDialog):
         """)
         
         layout = QVBoxLayout(self.container)
-        layout.setContentsMargins(30, 30, 30, 30)
+        layout.setContentsMargins(30, 25, 30, 25)
+        layout.setSpacing(10)
         
         # Song Header
         header_layout = QVBoxLayout()
@@ -81,12 +82,21 @@ class ResultsDialog(QDialog):
         diff.setStyleSheet(f"font-size: 14px; color: {styles.COLOR_ACCENT}; font-weight: bold; letter-spacing: 2px;")
         diff.setAlignment(Qt.AlignCenter)
         header_layout.addWidget(diff)
+        
+        is_failed = results.get('failed', False)
+        status_lbl = QLabel("GAME OVER" if is_failed else "SONG COMPLETED")
+        status_color = "#FF5252" if is_failed else "#00FF00"
+        status_lbl.setStyleSheet(f"font-size: 16px; color: {status_color}; font-weight: bold; letter-spacing: 3px; margin-top: 5px;")
+        status_lbl.setAlignment(Qt.AlignCenter)
+        header_layout.addWidget(status_lbl)
+        
         layout.addLayout(header_layout)
         
         # Rank Area (Animated)
         self.rank_label = QLabel(results.get('rank', 'F'))
-        self.rank_color = "#FFD700" if results.get('rank') == 'S' else "#00B8D4" if results.get('rank') == 'A' else "#FFFFFF"
-        self.rank_label.setStyleSheet(f"font-size: 160px; font-weight: 900; color: {self.rank_color};")
+        rank_str = results.get('rank', 'F')
+        self.rank_color = "#FFD700" if rank_str == 'S' else "#00B8D4" if rank_str == 'A' else "#00FF00" if rank_str == 'B' else "#FF9100" if rank_str == 'C' else "#FF5252"
+        self.rank_label.setStyleSheet(f"font-size: 100px; font-weight: 900; color: {self.rank_color}; margin-top: -10px; margin-bottom: -10px;")
         self.rank_label.setAlignment(Qt.AlignCenter)
         
         # Rank Shadow Glow

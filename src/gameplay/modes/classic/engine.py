@@ -33,7 +33,7 @@ class Tile:
                 self.is_holding = False
                 self.hold_complete = True
             return
-        if self.clicked or self.hold_complete:
+        if self.clicked or self.hold_complete or self.missed:
             self.opacity = max(0, self.opacity - 400 * dt)
             return
         time_diff = current_time - self.spawn_time
@@ -219,6 +219,7 @@ class GameEngine:
         
         self.snow_particles = [SnowParticle(constants.SCREEN_WIDTH, constants.SCREEN_HEIGHT) for _ in range(50)]
         self.current_game_time = -3.0
+        self.no_fail = self.custom_settings.get("no_fail", False)
         
         self.hidden_mode = self.custom_settings.get("hidden_notes", False)
         self.sudden_mode = self.custom_settings.get("sudden_notes", False)
@@ -363,8 +364,8 @@ class GameEngine:
             tile.update(current_time, dt, self.tile_speed)
             if not tile.missed and not tile.clicked and not tile.hold_complete:
                 hit_line_y = constants.SCREEN_HEIGHT - 150
-                # Automatically miss the tile if the song has passed its beat time by more than 150 ms
-                if current_time > tile.spawn_time + 0.150:
+                # Automatically miss the tile if its top has completely passed the hit line
+                if tile.y >= hit_line_y:
                     tile.missed = True
                     self.misses += 1
                     self.register_hit(0, "MISS", tile.x + constants.LANE_WIDTH//2, hit_line_y)
@@ -407,7 +408,7 @@ class GameEngine:
     def trigger_damage(self):
         self.health = max(0, self.health - 10)
         self.damage_alpha = 150
-        if self.health <= 0:
+        if self.health <= 0 and not getattr(self, 'no_fail', False):
             self.game_over = True
 
     def register_hit(self, score_add, judgment, x_pos, y_pos):
@@ -431,9 +432,11 @@ class GameEngine:
             self.increment_combo()
             if judgment == "PERFECT":
                 self.perfects += 1
+                self.health = min(100.0, self.health + 3.0)
                 text_color = (50, 255, 50)
             elif judgment == "GOOD":
                 self.goods += 1
+                self.health = min(100.0, self.health + 1.0)
                 text_color = (0, 184, 212)
             self.spawn_particles(x_pos, y_pos, text_color)
         
@@ -476,30 +479,51 @@ class GameEngine:
 
     def handle_keydown(self, lane_index, current_time):
         hit_line_y = constants.SCREEN_HEIGHT - 150
-        perfect_window = 0.050  # ±50 ms
-        good_window = 0.150     # ±150 ms
         
+        # Look for the lowest active note (largest y coordinate) in the lane
         target_tile = None
-        min_time_diff = 999.0
+        max_y = -999.0
         
         for tile in self.tiles:
             if tile.lane == lane_index and not tile.clicked and not tile.missed and not tile.is_holding and not tile.hold_complete:
-                time_diff = abs(current_time - tile.spawn_time)
-                if time_diff < good_window and time_diff < min_time_diff:
-                    min_time_diff = time_diff
+                if tile.y > max_y:
+                    max_y = tile.y
                     target_tile = tile
-
+                    
         if target_tile:
-            if target_tile.duration > 0:
-                target_tile.is_holding = True
-                target_tile.hit_time_audio = current_time
-                judgment = "PERFECT" if min_time_diff < perfect_window else "GOOD"
-                self.register_hit(50, judgment, target_tile.x + constants.LANE_WIDTH//2, hit_line_y)
+            # Calculate physical distance relation to the hit line
+            tile_bottom = target_tile.y + target_tile.height
+            diff_y = tile_bottom - hit_line_y
+            
+            if diff_y < -150:
+                # Too far above the line - empty lane miss
+                self.register_hit(0, "MISS", lane_index * constants.LANE_WIDTH + constants.LANE_WIDTH//2, hit_line_y)
+            elif diff_y < 0:
+                # Close but hasn't touched the line yet - EARLY MISS!
+                target_tile.missed = True
+                self.misses += 1
+                self.register_hit(0, "MISS", target_tile.x + constants.LANE_WIDTH//2, hit_line_y)
+            elif diff_y < target_tile.height:
+                # Touched the line and currently crossing - HIT!
+                # Center of the tile is aligned when diff_y is between 25% and 75% of tile height
+                is_perfect = (target_tile.height * 0.25 <= diff_y <= target_tile.height * 0.75)
+                judgment = "PERFECT" if is_perfect else "GOOD"
+                
+                if target_tile.duration > 0:
+                    # Hold note
+                    target_tile.is_holding = True
+                    target_tile.hit_time_audio = current_time
+                    self.register_hit(50, judgment, target_tile.x + constants.LANE_WIDTH//2, hit_line_y)
+                else:
+                    # Normal note
+                    target_tile.clicked = True
+                    score_add = 300 if judgment == "PERFECT" else 150
+                    self.register_hit(score_add, judgment, target_tile.x + constants.LANE_WIDTH//2, hit_line_y)
             else:
-                target_tile.clicked = True
-                judgment = "PERFECT" if min_time_diff < perfect_window else "GOOD"
-                score_add = 300 if judgment == "PERFECT" else 150
-                self.register_hit(score_add, judgment, target_tile.x + constants.LANE_WIDTH//2, hit_line_y)
+                # Top has already passed the line (auto-miss fallback)
+                target_tile.missed = True
+                self.misses += 1
+                self.register_hit(0, "MISS", target_tile.x + constants.LANE_WIDTH//2, hit_line_y)
         else:
             self.register_hit(0, "MISS", lane_index * constants.LANE_WIDTH + constants.LANE_WIDTH//2, hit_line_y)
 
@@ -514,6 +538,7 @@ class GameEngine:
                 else:
                     tile.is_holding = False
                     tile.missed = True
+                    self.misses += 1
                     self.register_hit(0, "MISS", tile.x + constants.LANE_WIDTH//2, constants.SCREEN_HEIGHT-150)
                 return
 
@@ -592,6 +617,15 @@ class GameEngine:
             combo_font = pygame.font.SysFont("Outfit", int(30 * self.combo_scale), bold=True)
             combo_surf = combo_font.render(f"{self.combo} COMBO", True, (255, 215, 0) if self.combo >= 10 else COLOR_ACCENT)
             self.screen.blit(combo_surf, (constants.SCREEN_WIDTH // 2 - combo_surf.get_width() // 2, 110))
+
+        # Health Bar
+        health_bar_y = 160
+        pygame.draw.rect(self.screen, (30, 30, 30), (constants.SCREEN_WIDTH // 2 - 100, health_bar_y, 200, 8), border_radius=4)
+        health_w = int(max(0.0, min(1.0, self.health / 100.0)) * 200)
+        h_pct = self.health / 100.0
+        h_color = (255, 50, 50) if h_pct <= 0.2 else (255, 150, 0) if h_pct <= 0.5 else (0, 255, 100)
+        if health_w > 0:
+            pygame.draw.rect(self.screen, h_color, (constants.SCREEN_WIDTH // 2 - 100, health_bar_y, health_w, 8), border_radius=4)
 
         self.draw_timer(current_time)
         if self.paused: self.draw_pause_overlay()

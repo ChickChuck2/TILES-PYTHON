@@ -619,6 +619,14 @@ class ModernMenuQt(QMainWindow):
         self.chk_smart_speed.stateChanged.connect(self.on_smart_speed_changed)
         layout.addWidget(self.chk_smart_speed)
         
+        # New: No Fail Modifier
+        s_no_fail = self.settings_manager.settings.get("no_fail", False)
+        self.chk_no_fail = QCheckBox("No Fail Mode (Infinite Life)")
+        self.chk_no_fail.setChecked(s_no_fail)
+        self.chk_no_fail.setStyleSheet(f"QCheckBox {{ font-size: 16px; spacing: 10px; color: #DDD; }} QCheckBox::indicator {{ width: 22px; height: 22px; border: 1px solid #555; border-radius: 6px; }} QCheckBox::indicator:checked {{ background: {styles.COLOR_ACCENT}; }}")
+        self.chk_no_fail.stateChanged.connect(self.on_no_fail_changed)
+        layout.addWidget(self.chk_no_fail)
+        
         # New: Hidden Notes Modifier
         s_hidden = self.settings_manager.settings.get("hidden_notes", False)
         self.chk_hidden_notes = QCheckBox("Hidden Notes (Fade-out)")
@@ -1430,6 +1438,7 @@ class ModernMenuQt(QMainWindow):
             "chord_chance": self.chord_slider.value() / 100.0,
             "hold_chance": self.hold_slider.value() / 100.0,
             "smart_speed": self.chk_smart_speed.isChecked(),
+            "no_fail": self.chk_no_fail.isChecked(),
             "hidden_notes": self.chk_hidden_notes.isChecked(),
             "sudden_notes": self.chk_sudden_notes.isChecked(),
             "flashlight_mode": self.chk_flashlight.isChecked(),
@@ -1625,6 +1634,10 @@ class ModernMenuQt(QMainWindow):
         self.settings_manager.settings["smart_speed"] = (state == Qt.Checked)
         self.settings_manager.save()
         self.update_stars()
+
+    def on_no_fail_changed(self, state):
+        self.settings_manager.settings["no_fail"] = (state == Qt.Checked)
+        self.settings_manager.save()
 
     def on_hidden_notes_changed(self, state):
         self.settings_manager.settings["hidden_notes"] = (state == Qt.Checked)

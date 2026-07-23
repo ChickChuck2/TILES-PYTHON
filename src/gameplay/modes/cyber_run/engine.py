@@ -92,6 +92,7 @@ class CyberRunEngine:
         self.goods = 0
         self.misses = 0
         self.health = 100.0
+        self.no_fail = self.custom_settings.get("no_fail", False)
         self.current_game_time = -3.0
         self.countdown = 3
         self.countdown_start = 0
@@ -272,10 +273,15 @@ class CyberRunEngine:
                             else: collision = True
                     
                     if action_success:
+                        # Convert pixel distance (75px for good, 30px for perfect) to time diff
+                        obs_speed = max(100.0, speed)
+                        good_window = max(0.050, 75.0 / obs_speed)
+                        perfect_window = max(0.020, 30.0 / obs_speed)
+                        
                         diff = abs(obs.spawn_time - self.current_game_time)
-                        if diff < 0.2: # Successful action in window
+                        if diff < good_window: # Successful action in window
                             obs.passed = True
-                            judgment = "PERFECT" if diff < 0.08 else "GOOD"
+                            judgment = "PERFECT" if diff < perfect_window else "GOOD"
                             self.register_hit(300 if judgment=="PERFECT" else 150, judgment, obs.x, self.player_y)
                     elif collision:
                         obs.hit = True
@@ -311,13 +317,17 @@ class CyberRunEngine:
             self.vibe_meter = max(0, self.vibe_meter - 10)
             if self.audio_manager: self.audio_manager.play_sfx("miss")
             self.cam_shake = 10
+            if self.health <= 0 and not getattr(self, 'no_fail', False):
+                self.game_over = True
         else:
             self.combo += 1
             if judgment == "PERFECT": 
                 self.perfects += 1
+                self.health = min(100.0, self.health + 3.0)
                 self.vibe_meter = min(100, self.vibe_meter + 5)
             else: 
                 self.goods += 1
+                self.health = min(100.0, self.health + 1.0)
                 self.vibe_meter = min(100, self.vibe_meter + 2)
             if self.audio_manager: 
                 name = "perfect" if judgment=="PERFECT" else "good"
