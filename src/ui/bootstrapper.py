@@ -223,6 +223,7 @@ def run_bootstrapper(song_path, difficulty, custom_settings, metadata=None):
     app = QApplication.instance()
     if not app:
         app = QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(False)
     
     boot = BootstrapperQt(song_path, difficulty, custom_settings, metadata)
     boot.show()

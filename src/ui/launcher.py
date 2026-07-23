@@ -1,7 +1,7 @@
 import sys
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QLabel, QPushButton, QFrame, QGraphicsDropShadowEffect)
-from PyQt5.QtCore import Qt, pyqtSignal, QSize
+from PyQt5.QtCore import Qt, pyqtSignal, QSize, QEventLoop
 from PyQt5.QtGui import QColor, QFont, QIcon, QPixmap
 import src.ui.styles as styles
 
@@ -66,6 +66,7 @@ class ModeCard(QFrame):
 
 class LauncherWindow(QMainWindow):
     mode_selected = pyqtSignal(str)
+    closed = pyqtSignal()
 
     def __init__(self):
         super().__init__()
@@ -115,20 +116,27 @@ class LauncherWindow(QMainWindow):
         self.mode_selected.emit(mode_id)
         self.close()
 
+    def closeEvent(self, event):
+        self.closed.emit()
+        event.accept()
+
 def run_launcher():
     app = QApplication.instance()
     if not app:
         app = QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(False)
     
     window = LauncherWindow()
     window.show()
     
+    loop = QEventLoop()
     selected_mode = [None]
     def handle_mode(m):
         selected_mode[0] = m
         
     window.mode_selected.connect(handle_mode)
-    app.exec_()
+    window.closed.connect(loop.quit)
+    loop.exec_()
     return selected_mode[0]
 
 if __name__ == "__main__":

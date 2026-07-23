@@ -28,7 +28,7 @@ class Tile:
     def update(self, current_time, dt, speed):
         hit_line_y = constants.SCREEN_HEIGHT - 150
         if self.is_holding:
-            self.y = hit_line_y
+            self.y = hit_line_y - self.height
             if current_time >= self.end_time:
                 self.is_holding = False
                 self.hold_complete = True
@@ -37,7 +37,7 @@ class Tile:
             self.opacity = max(0, self.opacity - 400 * dt)
             return
         time_diff = current_time - self.spawn_time
-        self.y = hit_line_y + (time_diff * speed)
+        self.y = (hit_line_y - self.height) + (time_diff * speed)
 
     def _project_y(self, y):
         """Perspective squeeze for off-screen notes."""
@@ -363,7 +363,8 @@ class GameEngine:
             tile.update(current_time, dt, self.tile_speed)
             if not tile.missed and not tile.clicked and not tile.hold_complete:
                 hit_line_y = constants.SCREEN_HEIGHT - 150
-                if tile.y > hit_line_y + 100:
+                # Automatically miss the tile if the song has passed its beat time by more than 150 ms
+                if current_time > tile.spawn_time + 0.150:
                     tile.missed = True
                     self.misses += 1
                     self.register_hit(0, "MISS", tile.x + constants.LANE_WIDTH//2, hit_line_y)
@@ -475,30 +476,30 @@ class GameEngine:
 
     def handle_keydown(self, lane_index, current_time):
         hit_line_y = constants.SCREEN_HEIGHT - 150
-        tolerance = 100 
+        perfect_window = 0.050  # ±50 ms
+        good_window = 0.150     # ±150 ms
+        
         target_tile = None
-        min_dist = 999
+        min_time_diff = 999.0
         
         for tile in self.tiles:
             if tile.lane == lane_index and not tile.clicked and not tile.missed and not tile.is_holding and not tile.hold_complete:
-                dist = abs(tile.y - hit_line_y)
-                if dist < tolerance and dist < min_dist:
-                    min_dist = dist
+                time_diff = abs(current_time - tile.spawn_time)
+                if time_diff < good_window and time_diff < min_time_diff:
+                    min_time_diff = time_diff
                     target_tile = tile
 
         if target_tile:
             if target_tile.duration > 0:
                 target_tile.is_holding = True
                 target_tile.hit_time_audio = current_time
-                judgment = "PERFECT" if min_dist < 25 else "GOOD"
+                judgment = "PERFECT" if min_time_diff < perfect_window else "GOOD"
                 self.register_hit(50, judgment, target_tile.x + constants.LANE_WIDTH//2, hit_line_y)
-                # Removed redundant tap sound
             else:
                 target_tile.clicked = True
-                judgment = "PERFECT" if min_dist < 25 else "GOOD"
+                judgment = "PERFECT" if min_time_diff < perfect_window else "GOOD"
                 score_add = 300 if judgment == "PERFECT" else 150
                 self.register_hit(score_add, judgment, target_tile.x + constants.LANE_WIDTH//2, hit_line_y)
-                # Removed redundant tap sound
         else:
             self.register_hit(0, "MISS", lane_index * constants.LANE_WIDTH + constants.LANE_WIDTH//2, hit_line_y)
 

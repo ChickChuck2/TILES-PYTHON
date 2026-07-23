@@ -1,11 +1,14 @@
 # --- Project Specific ---
 assets/cache/
-assets/music/*.mp3
-assets/music/youtube/*.mp3
-assets/music/spotify/*.mp3
+assets/music/**/*.mp3
+assets/music/**/*.wav
+assets/music/**/*.mp4
+assets/music/**/*.ogg
+metadata_cache.json
 *.log
 crash_log.txt
 generate_sfx.py
+test_audio.py
 .env
 .env.*
 .python-version
@@ -87,4 +90,3 @@ dmypy.json
 .pyre/
 .pytype/
 cython_debug/
-assets/music/youtube/Moskwa.mp4

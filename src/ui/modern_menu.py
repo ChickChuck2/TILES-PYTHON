@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import (
     QGraphicsDropShadowEffect, QButtonGroup, QDialog, QSizePolicy, QTabWidget,
     QListWidget, QListWidgetItem
 )
-from PyQt5.QtCore import Qt, pyqtSignal, QSize, pyqtSlot, QThread, QUrl, QTimer, QObject
+from PyQt5.QtCore import Qt, pyqtSignal, QSize, pyqtSlot, QThread, QUrl, QTimer, QObject, QEventLoop
 from PyQt5.QtGui import QIcon, QFont, QPixmap, QColor, QFontMetrics
 
 # Local imports
@@ -80,6 +80,17 @@ def get_image_manager():
     if _IMAGE_MANAGER is None:
         _IMAGE_MANAGER = ImageManager()
     return _IMAGE_MANAGER
+
+_BACKGROUND_THREADS = []
+
+def keep_thread_alive(thread):
+    if thread and thread.isRunning():
+        _BACKGROUND_THREADS.append(thread)
+    # Clean up completed threads from the list
+    for t in list(_BACKGROUND_THREADS):
+        if not t.isRunning():
+            try: _BACKGROUND_THREADS.remove(t)
+            except ValueError: pass
 
 class SpotifyTrackCard(QFrame):
     clicked = pyqtSignal(dict)
@@ -219,6 +230,7 @@ class ModernMenuQt(QMainWindow):
     playlist_ready = pyqtSignal(list, str, dict)
     download_finished_signal = pyqtSignal(str, str)
     download_progress_signal = pyqtSignal(float)
+    closed = pyqtSignal()
 
     def __init__(self, songs, audio_manager, discord_rpc=None, results=None):
         super().__init__()
@@ -306,13 +318,27 @@ class ModernMenuQt(QMainWindow):
             self.analysis_manager.stop()
         if hasattr(self, 'preview_thread') and self.preview_thread and self.preview_thread.isRunning():
             self.preview_thread.stop()
-            # Still using wait here? 
-            # On close, it's safer to just signal and let it finish.
-            # But we want to ensure it doesn't try to access widgets.
+            try: self.preview_thread.disconnect()
+            except: pass
+            keep_thread_alive(self.preview_thread)
             
         if hasattr(self, 'game_analysis_thread') and isinstance(self.game_analysis_thread, QThread) and self.game_analysis_thread.isRunning():
             self.game_analysis_thread.stop()
+            try: self.game_analysis_thread.disconnect()
+            except: pass
+            keep_thread_alive(self.game_analysis_thread)
+
+        if hasattr(self, 'login_thread') and self.login_thread and self.login_thread.isRunning():
+            try: self.login_thread.disconnect()
+            except: pass
+            keep_thread_alive(self.login_thread)
+
+        if hasattr(self, 'tracks_thread') and self.tracks_thread and self.tracks_thread.isRunning():
+            try: self.tracks_thread.disconnect()
+            except: pass
+            keep_thread_alive(self.tracks_thread)
         
+        self.closed.emit()
         event.accept()
 
     def init_sidebar(self):
@@ -1357,7 +1383,9 @@ class ModernMenuQt(QMainWindow):
         # Preview Logic: Use safe stop
         if hasattr(self, 'preview_thread') and self.preview_thread and self.preview_thread.isRunning():
             self.preview_thread.stop()
-            # DON'T wait on main thread, let it die in background
+            try: self.preview_thread.disconnect()
+            except: pass
+            keep_thread_alive(self.preview_thread)
             
         self.preview_thread = AnalysisThread(song_path, "Normal")
         self.preview_thread.finished.connect(self.start_preview)
@@ -1386,7 +1414,9 @@ class ModernMenuQt(QMainWindow):
         # 3. Stop preview before starting game analysis
         if hasattr(self, 'preview_thread') and self.preview_thread and self.preview_thread.isRunning():
             self.preview_thread.stop()
-            # Again, don't wait, let it finish naturally
+            try: self.preview_thread.disconnect()
+            except: pass
+            keep_thread_alive(self.preview_thread)
 
         self.game_analysis_thread = AnalysisThread(self.selected_song, self.diff_combo.currentText())
         self.game_analysis_thread.progress.connect(lambda v, m: self.prog_bar.setValue(int(v)))
@@ -1694,14 +1724,15 @@ def run_menu(songs, audio_manager, discord_rpc=None, results=None):
     app = QApplication.instance()
     if not app:
         app = QApplication(sys.argv)
-    
-    # Font Loader could go here
+    app.setQuitOnLastWindowClosed(False)
     
     # Store results for return
     result = {"song": None, "songs": [], "diff": "Normal", "beats": [], "custom": {}, "metadata": {}, "library": []}
     
     window = ModernMenuQt(songs, audio_manager, discord_rpc, results)
     window.show()
+    
+    loop = QEventLoop()
     
     def handle_ready(song, diff, beats, custom, metadata):
         result["song"] = song
@@ -1721,7 +1752,8 @@ def run_menu(songs, audio_manager, discord_rpc=None, results=None):
     
     window.song_ready.connect(handle_ready)
     window.playlist_ready.connect(handle_playlist)
-    app.exec_()
+    window.closed.connect(loop.quit)
+    loop.exec_()
     
     if result["songs"]:
         return result["songs"], result["diff"], [], result["custom"], result["metadata"], result["library"]
